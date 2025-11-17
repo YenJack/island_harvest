@@ -1,98 +1,35 @@
+# schemas.py
 from pydantic import BaseModel
+from typing import Optional
 
-# ------------------------------
-# User
-# ------------------------------
 class UserBase(BaseModel):
-    fullName: str | None = None
-    phoneNumber: str | None = None
-    registrationDate: str | None = None
-    lastLoginDate: str | None = None
-    emailAddress: str | None = None
-    userId: str | None = None
-    username: str | None = None
-    userPassword: str | None = None
-    deviceList: str | None = None
-    farmList: str | None = None
-    sharedDevices: str | None = None
-    sharedFarms: str | None = None
+    fullName: Optional[str] = None
+    phoneNumber: Optional[str] = None
+    registrationDate: Optional[str] = None
+    lastLoginDate: Optional[str] = None
+    emailAddress: Optional[str] = None
+    userId: Optional[str] = None
+    username: Optional[str] = None
+    deviceList: Optional[str] = None
+    farmList: Optional[str] = None
+    sharedDevices: Optional[str] = None
+    sharedFarms: Optional[str] = None
 
 class UserCreate(UserBase):
-    pass
+    username: str
+    password: str
 
 class User(UserBase):
     id: int
     class Config:
         orm_mode = True
 
-
-# ------------------------------
-# Farm
-# ------------------------------
-class FarmBase(BaseModel):
-    lat: float
-    lon: float
-    farmName: str | None = None
-    farmNumber: str | None = None
-    deviceArray: str | None = None
-    photoDirName: str | None = None
-    farmerName: str | None = None
-    farmType: str | None = None
-    cropName: str | None = None
-    farmAddress: str | None = None
-    isDeleted: str | None = None
-    coordinates: str | None = None
-    boundary: str | None = None
-    cultivationStatus: str | None = None
-    lastModifiedDate: str | None = None
-    landArea: str | None = None
-    userId: str | None = None
-    sharedFarmsWith: str | None = None
-
-class FarmCreate(FarmBase):
-    pass
-
-class Farm(FarmBase):
-    id: int
-    class Config:
-        orm_mode = True
-
-
-# ------------------------------
-# Device
-# ------------------------------
-class DeviceBase(BaseModel):
-    scene: str
-    name: str
-    iconPath: str
-    sensors: str
-    isControlType: int
-    productId: str | None = None
-    serialNumber: str | None = None
-    sensorList: str | None = None
-    farmNumber: str | None = None
-    sharedDevicesWith: str | None = None
-    automationSetting: str | None = None
-    devicePassword: str | None = None
-    factoryResetStatus: str | None = None
-
-class DeviceCreate(DeviceBase):
-    pass
-
-class Device(DeviceBase):
-    id: int
-    class Config:
-        orm_mode = True
-
-
-# ------------------------------
 # Sensor
-# ------------------------------
 class SensorBase(BaseModel):
     sensorCategory: str
     sensorProductName: str
     sensorSerialNumber: str
-    name: str | None = None
+    name: Optional[str] = None
 
 class SensorCreate(SensorBase):
     pass
