@@ -2,5 +2,9 @@ fastapi
 uvicorn
 sqlalchemy
 pydantic
-pydantic_core
-python-multipart
+python-jose[cryptography]
+passlib[bcrypt]
+pymysql        # if using MySQL
+python-dotenv
+alembic        # optional (DB migration)
+
