@@ -1,13 +1,17 @@
-from fastapi import FastAPI, Depends
+# main.py
+from fastapi import FastAPI, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-
-from database import engine, SessionLocal
-from models import Base, User, Farm, Device, Sensor
-import schemas
+from database import engine, SessionLocal, Base
+import models, schemas, crud
+from auth import create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES, ALGORITHM, SECRET_KEY
+from datetime import timedelta
+from jose import JWTError, jwt
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 
 Base.metadata.create_all(bind=engine)
-
 app = FastAPI()
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 # Dependency
 def get_db():
@@ -17,131 +21,63 @@ def get_db():
     finally:
         db.close()
 
+# token endpoint
+@app.post("/token")
+def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    user = crud.authenticate_user(db, form_data.username, form_data.password)
+    if not user:
+        raise HTTPException(status_code=401, detail="Incorrect username or password")
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(data={"sub": user.username, "user_id": user.id}, expires_delta=access_token_expires)
+    return {"access_token": access_token, "token_type": "bearer"}
 
-# ------------------------------
-# User CRUD
-# ------------------------------
+# get current user
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    credentials_exception = HTTPException(status_code=401, detail="Could not validate credentials")
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+    user = db.query(models.User).filter(models.User.username == username).first()
+    if user is None:
+        raise credentials_exception
+    return user
+
+# register user
 @app.post("/users", response_model=schemas.User)
-def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
-    db_user = User(**user.dict())
-    db.add(db_user)
-    db.commit()
-    db.refresh(db_user)
-    return db_user
+def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
+    return crud.create_user(db, user)
 
-@app.get("/users", response_model=list[schemas.User])
-def get_all_users(db: Session = Depends(get_db)):
-    return db.query(User).all()
+# Protected example: get me
+@app.get("/me", response_model=schemas.User)
+def read_me(current_user = Depends(get_current_user)):
+    return current_user
 
-@app.get("/users/{id}", response_model=schemas.User)
-def get_user(id: int, db: Session = Depends(get_db)):
-    return db.query(User).filter(User.id == id).first()
-
-@app.put("/users/{id}", response_model=schemas.User)
-def update_user(id: int, new_data: schemas.UserCreate, db: Session = Depends(get_db)):
-    db.query(User).filter(User.id == id).update(new_data.dict())
-    db.commit()
-    return db.query(User).filter(User.id == id).first()
-
-@app.delete("/users/{id}")
-def delete_user(id: int, db: Session = Depends(get_db)):
-    db.query(User).filter(User.id == id).delete()
-    db.commit()
-    return {"status": "ok"}
-
-
-# ------------------------------
-# Farm CRUD
-# ------------------------------
-@app.post("/farms", response_model=schemas.Farm)
-def create_farm(farm: schemas.FarmCreate, db: Session = Depends(get_db)):
-    db_farm = Farm(**farm.dict())
-    db.add(db_farm)
-    db.commit()
-    db.refresh(db_farm)
-    return db_farm
-
-@app.get("/farms", response_model=list[schemas.Farm])
-def get_all_farms(db: Session = Depends(get_db)):
-    return db.query(Farm).order_by(Farm.id.desc()).all()
-
-@app.get("/farms/{id}", response_model=schemas.Farm)
-def get_farm(id: int, db: Session = Depends(get_db)):
-    return db.query(Farm).filter(Farm.id == id).first()
-
-@app.put("/farms/{id}", response_model=schemas.Farm)
-def update_farm(id: int, farm: schemas.FarmCreate, db: Session = Depends(get_db)):
-    db.query(Farm).filter(Farm.id == id).update(farm.dict())
-    db.commit()
-    return db.query(Farm).filter(Farm.id == id).first()
-
-@app.delete("/farms/{id}")
-def delete_farm(id: int, db: Session = Depends(get_db)):
-    db.query(Farm).filter(Farm.id == id).delete()
-    db.commit()
-    return {"status": "ok"}
-
-
-# ------------------------------
-# Device CRUD
-# ------------------------------
-@app.post("/devices", response_model=schemas.Device)
-def create_device(device: schemas.DeviceCreate, db: Session = Depends(get_db)):
-    db_device = Device(**device.dict())
-    db.add(db_device)
-    db.commit()
-    db.refresh(db_device)
-    return db_device
-
-@app.get("/devices", response_model=list[schemas.Device])
-def get_all_devices(db: Session = Depends(get_db)):
-    return db.query(Device).order_by(Device.id.desc()).all()
-
-@app.get("/devices/{id}", response_model=schemas.Device)
-def get_device(id: int, db: Session = Depends(get_db)):
-    return db.query(Device).filter(Device.id == id).first()
-
-@app.put("/devices/{id}", response_model=schemas.Device)
-def update_device(id: int, device: schemas.DeviceCreate, db: Session = Depends(get_db)):
-    db.query(Device).filter(Device.id == id).update(device.dict())
-    db.commit()
-    return db.query(Device).filter(Device.id == id).first()
-
-@app.delete("/devices/{id}")
-def delete_device(id: int, db: Session = Depends(get_db)):
-    db.query(Device).filter(Device.id == id).delete()
-    db.commit()
-    return {"status": "ok"}
-
-
-
-# ------------------------------
-# Sensor CRUD
-# ------------------------------
+# sensor CRUD (protected)
 @app.post("/sensors", response_model=schemas.Sensor)
-def create_sensor(sensor: schemas.SensorCreate, db: Session = Depends(get_db)):
-    db_sensor = Sensor(**sensor.dict())
-    db.add(db_sensor)
-    db.commit()
-    db.refresh(db_sensor)
-    return db_sensor
+def create_sensor(sensor: schemas.SensorCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    return crud.create_sensor(db, sensor)
 
 @app.get("/sensors", response_model=list[schemas.Sensor])
-def get_all_sensors(db: Session = Depends(get_db)):
-    return db.query(Sensor).order_by(Sensor.id.desc()).all()
+def read_sensors(db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    return crud.get_sensors(db)
 
 @app.get("/sensors/{id}", response_model=schemas.Sensor)
-def get_sensor(id: int, db: Session = Depends(get_db)):
-    return db.query(Sensor).filter(Sensor.id == id).first()
+def read_sensor(id: int, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    s = crud.get_sensor(db, id)
+    if not s:
+        raise HTTPException(status_code=404, detail="Not found")
+    return s
 
 @app.put("/sensors/{id}", response_model=schemas.Sensor)
-def update_sensor(id: int, sensor: schemas.SensorCreate, db: Session = Depends(get_db)):
-    db.query(Sensor).filter(Sensor.id == id).update(sensor.dict())
-    db.commit()
-    return db.query(Sensor).filter(Sensor.id == id).first()
+def put_sensor(id: int, sensor: schemas.SensorCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    s = crud.update_sensor(db, id, sensor.dict())
+    return s
 
 @app.delete("/sensors/{id}")
-def delete_sensor(id: int, db: Session = Depends(get_db)):
-    db.query(Sensor).filter(Sensor.id == id).delete()
-    db.commit()
-    return {"status": "ok"}
+def del_sensor(id: int, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    crud.delete_sensor(db, id)
+    return {"ok": True}
